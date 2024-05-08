@@ -64,6 +64,19 @@ std::string log(const Request &req, const Response &res) {
   return s;
 }
 
+std::string generate_random_hash(int length = 16) {
+  static const char alphanum[] = "0123456789abcdef";
+  std::random_device rd;  // Seed for random number generation
+  std::mt19937 gen(rd()); // Mersenne Twister random number generator
+  std::uniform_int_distribution<> dis(0, 15);
+
+  std::stringstream ss;
+  for (int i = 0; i < length; ++i) {
+    ss << alphanum[dis(gen)];
+  }
+  return ss.str();
+}
+
 int main(void) {
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
   SSLServer svr(SERVER_CERT_FILE, SERVER_PRIVATE_KEY_FILE);
@@ -76,25 +89,47 @@ int main(void) {
     return -1;
   }
 
-  svr.Get("/", [=](const Request & /*req*/, Response &res) {
-    res.set_redirect("/hi");
-  });
-
-  svr.Get("/hi", [](const Request & /*req*/, Response &res) {
-    res.set_content("Hello World!\n", "text/plain");
-  });
-
-  svr.Get("/slow", [](const Request & /*req*/, Response &res) {
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    res.set_content("Slow...\n", "text/plain");
-  });
-
   svr.Get("/dump", [](const Request &req, Response &res) {
     res.set_content(dump_headers(req.headers), "text/plain");
   });
 
   svr.Get("/stop",
           [&](const Request & /*req*/, Response & /*res*/) { svr.stop(); });
+
+  svr.Post("/calc", [](const httplib::Request &req, httplib::Response &res) {
+    if (req.has_header("Content-Type") &&
+        req.get_header_value("Content-Type") == "application/json") {
+
+      std::string received_data_loation = "/home/received_data.json";
+      std::string calculator_loation = "/home/alpine-build/bin/vrp_capacity";
+      std::string random_filename = generate_random_hash() + ".txt";
+      std::string result_loation = "/home/"+ random_filename;
+
+      std::ofstream outfile(received_data_loation,
+                            std::ios::out | std::ios::trunc);
+      if (outfile.is_open()) {
+
+        outfile << req.body;
+        outfile.close();
+
+        std::string commandStr =
+            calculator_loation
+            + " --input_filepath="+ received_data_loation
+            + " &> " + result_loation;
+
+        system(commandStr.c_str());
+
+        res.status = 200;
+        res.set_content(random_filename, "text/plain");
+      } else {
+        res.status = 500;
+        res.set_content("Failed to open the file for writing.", "text/plain");
+      }
+    } else {
+      res.status = 415; // Unsupported media type
+      res.set_content("Expected Content-Type: application/json.", "text/plain");
+    }
+  });
 
   svr.set_error_handler([](const Request & /*req*/, Response &res) {
     const char *fmt = "<p>Error Status: <span style='color:red;'>%d</span></p>";
@@ -107,6 +142,7 @@ int main(void) {
     printf("%s", log(req, res).c_str());
   });
 
+  printf("server started\n");
   svr.listen("localhost", 8080);
 
   return 0;
