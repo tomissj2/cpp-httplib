@@ -1,10 +1,3 @@
-//
-//  client.cc
-//
-//  Copyright (c) 2019 Yuji Hirose. All rights reserved.
-//  MIT License
-//
-
 #include <httplib.h>
 #include <iostream>
 
@@ -12,29 +5,47 @@
 
 using namespace std;
 
-int main(void) {
-#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-  httplib::SSLClient cli("localhost", 8080);
-  // httplib::SSLClient cli("google.com");
-  // httplib::SSLClient cli("www.youtube.com");
-  cli.set_ca_cert_path(CA_CERT_FILE);
-  cli.enable_server_certificate_verification(true);
-#else
-  httplib::Client cli("localhost", 8080);
-#endif
+int main(int argc, char *argv[]) {
+  if (argc < 2) {
+    std::cerr << "Error: No file path provided." << std::endl;
+    return 1;
+  }
 
-  if (auto res = cli.Get("/hi")) {
-    cout << res->status << endl;
-    cout << res->get_header_value("Content-Type") << endl;
-    cout << res->body << endl;
+  std::string filePath = argv[1];
+
+  std::ifstream file(filePath);
+  if (!file.is_open()) {
+    std::cerr << "Error: Unable to open file '" << filePath << "'."
+              << std::endl;
+    return 1;
+  }
+
+  std::stringstream buffer;
+  buffer << file.rdbuf();
+  std::string fileContents = buffer.str();
+  file.close();
+
+  // std::cout << "Contents of '" << filePath << "':" << std::endl;
+  // std::cout << fileContents << std::endl;
+
+  const char *host_env = std::getenv("FILE_UPLOAD_HOST");
+  const char *host_port = std::getenv("FILE_UPLOAD_PORT");
+  const char *host_endpoint = std::getenv("FILE_UPLOAD_ENDPOINT");
+  std::string host = (host_env) ? host_env : "localhost";
+  std::string port = (host_port) ? host_port : "8080";
+  std::string endpoint = (host_endpoint) ? host_endpoint : "/upload";
+
+  std::string url = "http://" + host + ":" + port;
+  httplib::Client client(url);
+
+  auto res = client.Post(endpoint, fileContents, "text/plain");
+
+  if (res.error() == httplib::Error::Success) {
+    std::cout << "Successfully posted the file contents to /upload."
+              << std::endl;
   } else {
-    cout << "error code: " << res.error() << std::endl;
-#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-    auto result = cli.get_openssl_verify_result();
-    if (result) {
-      cout << "verify error: " << X509_verify_cert_error_string(result) << endl;
-    }
-#endif
+    std::cerr << "Error posting to /upload: " << httplib::to_string(res.error())
+              << std::endl;
   }
 
   return 0;
