@@ -7,7 +7,7 @@
 
 #include <chrono>
 #include <cstdio>
-#include <httplib.h>
+#include "httplib.h"
 
 #define SERVER_CERT_FILE "./cert.pem"
 #define SERVER_PRIVATE_KEY_FILE "./key.pem"
@@ -78,16 +78,16 @@ std::string generate_random_hash(int length = 16) {
 }
 
 int main(void) {
-#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-  SSLServer svr(SERVER_CERT_FILE, SERVER_PRIVATE_KEY_FILE);
-#else
+//#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+//  SSLServer svr(SERVER_CERT_FILE, SERVER_PRIVATE_KEY_FILE);
+//
+//  if (!svr.is_valid()) {
+//    printf("server has an error...\n");
+//    return -1;
+//  }
+//#else
+//#endif
   Server svr;
-#endif
-
-  if (!svr.is_valid()) {
-    printf("server has an error...\n");
-    return -1;
-  }
 
   svr.Get("/dump", [](const Request &req, Response &res) {
     res.set_content(dump_headers(req.headers), "text/plain");
@@ -101,7 +101,7 @@ int main(void) {
         req.get_header_value("Content-Type") == "application/json") {
 
       std::string received_data_loation = "/home/received_data.json";
-      std::string calculator_loation = "/home/alpine-build/bin/vrp_capacity";
+      std::string calculator_loation = "/home/bin/vrp_capacity";
       std::string random_filename = generate_random_hash() + ".txt";
       std::string result_loation = "/home/"+ random_filename;
 
