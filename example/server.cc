@@ -97,7 +97,7 @@ int main(void) {
           "/home/" + random_filename + "_in.json";
       const std::string calculator_loation = "/home/bin/vrp_capacity";
       const std::string client_loation = "/home/bin/client";
-      const std::string result_loation = "/home/" + random_filename+"_out.json";
+      const std::string result_loation = "/home/" + random_filename+"_log.txt";
 
       std::ofstream outfile(received_data_loation,
                             std::ios::out | std::ios::trunc);
