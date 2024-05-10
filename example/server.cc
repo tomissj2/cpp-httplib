@@ -5,9 +5,9 @@
 //  MIT License
 //
 
+#include "httplib.h"
 #include <chrono>
 #include <cstdio>
-#include "httplib.h"
 
 #define SERVER_CERT_FILE "./cert.pem"
 #define SERVER_PRIVATE_KEY_FILE "./key.pem"
@@ -65,6 +65,7 @@ std::string log(const Request &req, const Response &res) {
 }
 
 std::string generate_random_hash(int length = 16) {
+  // todo make this bulletproof by adding utc time to generations
   static const char alphanum[] = "0123456789abcdef";
   std::random_device rd;  // Seed for random number generation
   std::mt19937 gen(rd()); // Mersenne Twister random number generator
@@ -78,15 +79,6 @@ std::string generate_random_hash(int length = 16) {
 }
 
 int main(void) {
-//#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-//  SSLServer svr(SERVER_CERT_FILE, SERVER_PRIVATE_KEY_FILE);
-//
-//  if (!svr.is_valid()) {
-//    printf("server has an error...\n");
-//    return -1;
-//  }
-//#else
-//#endif
   Server svr;
 
   svr.Get("/dump", [](const Request &req, Response &res) {
@@ -100,10 +92,12 @@ int main(void) {
     if (req.has_header("Content-Type") &&
         req.get_header_value("Content-Type") == "application/json") {
 
-      std::string received_data_loation = "/home/received_data.json";
-      std::string calculator_loation = "/home/bin/vrp_capacity";
-      std::string random_filename = generate_random_hash() + ".txt";
-      std::string result_loation = "/home/"+ random_filename;
+      const std::string random_filename = generate_random_hash() + ".txt";
+      const std::string received_data_loation =
+          "/home/" + random_filename + "_in.json";
+      const std::string calculator_loation = "/home/bin/vrp_capacity";
+      const std::string client_loation = "/home/bin/client";
+      const std::string result_loation = "/home/" + random_filename+"_out.json";
 
       std::ofstream outfile(received_data_loation,
                             std::ios::out | std::ios::trunc);
@@ -112,15 +106,22 @@ int main(void) {
         outfile << req.body;
         outfile.close();
 
-        std::string commandStr =
-            calculator_loation
-            + " --input_filepath="+ received_data_loation
-            + " &> " + result_loation;
+        const std::string calculateCommandStr =
+            calculator_loation + " --input_filepath=" + received_data_loation +
+            " &> " + result_loation;
 
-        system(commandStr.c_str());
-
+        const int status = system(calculateCommandStr.c_str());
         res.status = 200;
         res.set_content(random_filename, "text/plain");
+
+        if (status == -1) {
+          printf("Error running system command.\n");
+        } else {
+          const std::string clientCommandStr =
+              client_loation + " " + result_loation;
+          system(clientCommandStr.c_str());
+        }
+
       } else {
         res.status = 500;
         res.set_content("Failed to open the file for writing.", "text/plain");
