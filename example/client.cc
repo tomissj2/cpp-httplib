@@ -64,7 +64,8 @@ int main(int argc, char *argv[]) {
   else
   {
       // Print error message
-      std::cerr << "Error: " << (res ? res->status : -1) << std::endl;
+      std::cerr << "Error getting " + endpoint << httplib::to_string(res.error()) << (res ? res->status : -1)
+              << std::endl;
       return -1;
   }
 
