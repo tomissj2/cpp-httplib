@@ -6,6 +6,7 @@
 //
 
 #include "httplib.h"
+#include "json.hpp"
 #include <chrono>
 #include <cstdio>
 
@@ -13,6 +14,7 @@
 #define SERVER_PRIVATE_KEY_FILE "./key.pem"
 
 using namespace httplib;
+using json = nlohmann::json;
 
 std::string dump_headers(const Headers &headers) {
   std::string s;
@@ -78,7 +80,17 @@ std::string generate_random_hash(int length = 16) {
   return ss.str();
 }
 
+const std::string log_prefix = "Server: ";
+
+void info(std::string input) { std::cout << log_prefix << input << std::endl; }
+
 int main(void) {
+
+  info("Started!");
+  const char *host_env = std::getenv("FILE_UPLOAD_HOST");
+  const char *host_port = std::getenv("FILE_UPLOAD_PORT");
+  const char *host_endpoint = std::getenv("FILE_UPLOAD_ENDPOINT");
+
   Server svr;
 
   svr.Get("/dump", [](const Request &req, Response &res) {
@@ -92,12 +104,16 @@ int main(void) {
     if (req.has_header("Content-Type") &&
         req.get_header_value("Content-Type") == "application/json") {
 
-      const std::string random_filename = generate_random_hash() + ".txt";
+      const std::string random_filename = generate_random_hash();
       const std::string received_data_loation =
           "/home/" + random_filename + "_in.json";
+      const std::string output_data_loation =
+          "/home/" + random_filename + "_in_out.json";
       const std::string calculator_loation = "/home/bin/vrp_capacity";
+      const std::string detailed_calculator_loation = "/home/bin/cvrptw";
       const std::string client_loation = "/home/bin/client";
-      const std::string result_loation = "/home/" + random_filename+"_log.txt";
+      const std::string result_loation =
+          "/home/" + random_filename + "_log.txt";
 
       std::ofstream outfile(received_data_loation,
                             std::ios::out | std::ios::trunc);
@@ -106,20 +122,40 @@ int main(void) {
         outfile << req.body;
         outfile.close();
 
+        json j = json::parse(req.body);
+        auto indata = j["datas"];
+
+        std::string loation = detailed_calculator_loation;
+        if (indata["time_matrix"].is_null())
+        {
+            loation = calculator_loation;
+        }
+
         const std::string calculateCommandStr =
-            calculator_loation + " --input_filepath=" + received_data_loation +
+            loation + " --input_filepath=" + received_data_loation +
             " &> " + result_loation;
+
+        info("calculation started: " + calculateCommandStr);
 
         const int status = system(calculateCommandStr.c_str());
         res.status = 200;
         res.set_content(random_filename, "text/plain");
 
-        if (status == -1) {
+        if (status == 1) {
           printf("Error running system command.\n");
         } else {
           const std::string clientCommandStr =
-              client_loation + " " + result_loation;
-          system(clientCommandStr.c_str());
+              client_loation + " " + output_data_loation;
+
+          info("sending data back: " + clientCommandStr);
+
+          const int clientStatus = system(clientCommandStr.c_str());
+
+          if (clientStatus == -1) {
+            info("Failed!");
+          } else {
+            info("Done!");
+          }
         }
 
       } else {
@@ -139,12 +175,13 @@ int main(void) {
     res.set_content(buf, "text/html");
   });
 
-  svr.set_logger([](const Request &req, const Response &res) {
-    printf("%s", log(req, res).c_str());
-  });
+  // svr.set_logger([](const Request &req, const Response &res) {
+  //   printf("%s", log(req, res).c_str());
+  // });
+  std::string loaclhost = "0.0.0.0";
+  auto port = 8080;
 
-  printf("server started\n");
-  svr.listen("localhost", 8080);
+  svr.listen(loaclhost, port);
 
   return 0;
 }
